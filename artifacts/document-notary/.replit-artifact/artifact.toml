@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Proofmark Document Notary"
+description = "A privacy-first web3 document notarization app that hashes files locally, anchors proof on-chain, and optionally stores copies on IPFS when available."
+version = "1.0.0"
+id = "artifacts/document-notary"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18660
+
+[services.development]
+run = "pnpm --filter @workspace/document-notary run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/document-notary", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/document-notary/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18660"
+BASE_PATH = "/"

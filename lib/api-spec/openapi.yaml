@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: ipfs
+    description: Optional IPFS document upload operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /upload:
+    post:
+      operationId: uploadDocument
+      tags: [ipfs]
+      summary: Upload a document to IPFS when configured
+      description: Attempts to pin a document through the server-side Pinata proxy. Failure is represented as a successful HTTP response so clients can continue with hash-only notarization.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadInput"
+      responses:
+        "200":
+          description: Upload result, including graceful fallback state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +54,24 @@ components:
           type: string
       required:
         - status
+    UploadInput:
+      type: object
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+    UploadResult:
+      type: object
+      required:
+        - success
+        - cid
+      properties:
+        success:
+          type: boolean
+        cid:
+          type: string
+        error:
+          type: ["string", "null"]
 
