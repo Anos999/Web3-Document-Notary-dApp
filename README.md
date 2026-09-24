@@ -1,5 +1,3 @@
-Below is a professional, copy-paste-ready `README.md` for the **Web3 Document Notary dApp**. It covers the project purpose, architecture, technology stack, repository structure, local setup, Replit deployment, environment variables, API/frontend startup, and troubleshooting.
-
 ````markdown
 # Web3 Document Notary dApp
 
