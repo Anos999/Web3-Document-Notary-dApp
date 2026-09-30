@@ -1,417 +1,931 @@
 ````markdown
 # Web3 Document Notary dApp
 
-A decentralized document notarization application that allows users to generate a cryptographic fingerprint of a document and use blockchain technology to establish verifiable proof of its existence and integrity.
+A decentralized document notarization application that creates a tamper-evident fingerprint of a document using **SHA-256** and records the proof on an Ethereum-compatible blockchain.
 
-The application combines a modern web frontend, a backend API, and Web3/blockchain functionality to provide a document verification workflow.
+The application allows a user to:
+
+1. Select a document.
+2. Calculate its SHA-256 hash locally in the browser.
+3. Optionally upload the document to IPFS.
+4. Connect a Web3 wallet such as MetaMask.
+5. Store the document fingerprint and metadata on-chain.
+6. Verify a document later by calculating its hash again and checking the blockchain.
+7. View the notarization owner, timestamp, description, transaction and optional IPFS copy.
+
+The project supports both a **local Hardhat blockchain** and **Ethereum Sepolia testnet**.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [Project Overview](#project-overview)
 - [Problem Statement](#problem-statement)
+- [Solution](#solution)
 - [Key Features](#key-features)
-- [How It Works](#how-it-works)
-- [System Architecture](#system-architecture)
-- [Application Architecture](#application-architecture)
 - [Technology Stack](#technology-stack)
-- [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
+- [Architecture](#architecture)
+- [Application Flow](#application-flow)
+- [How Document Notarization Works](#how-document-notarization-works)
+- [How Verification Works](#how-verification-works)
+- [Smart Contract](#smart-contract)
+- [Smart Contract Functions](#smart-contract-functions)
+- [Frontend](#frontend)
+- [IPFS Integration](#ipfs-integration)
+- [APIs and External Services](#apis-and-external-services)
 - [Environment Variables](#environment-variables)
-- [Running Locally](#running-locally)
-- [Running on Replit](#running-on-replit)
-- [Running the Frontend](#running-the-frontend)
-- [Running the API Server](#running-the-api-server)
-- [Running Both Services](#running-both-services)
-- [Building for Production](#building-for-production)
-- [Document Notarization Workflow](#document-notarization-workflow)
-- [Document Verification Workflow](#document-verification-workflow)
-- [API Architecture](#api-architecture)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Running the Project Locally](#running-the-project-locally)
+- [Using Sepolia Testnet](#using-sepolia-testnet)
+- [Deploying the Smart Contract](#deploying-the-smart-contract)
+- [Building the Frontend](#building-the-frontend)
+- [Project Structure](#project-structure)
+- [End-to-End Example](#end-to-end-example)
+- [Problems Faced and Solutions](#problems-faced-and-solutions)
+- [Important Requirements](#important-requirements)
 - [Security Considerations](#security-considerations)
 - [Troubleshooting](#troubleshooting)
-- [Deployment Options](#deployment-options)
-- [Development Guidelines](#development-guidelines)
+- [Limitations](#limitations)
 - [Future Improvements](#future-improvements)
-- [License](#license)
+- [Conclusion](#conclusion)
 
 ---
 
-# Overview
+# Project Overview
 
-**Web3 Document Notary dApp** is a blockchain-based document notarization platform.
+## What is a Document Notary dApp?
 
-The primary purpose of the application is to allow a user to create a cryptographic representation of a document and associate that representation with blockchain data.
+A document notary application provides proof that a particular document existed at a particular point in time.
 
-Instead of storing the complete document on-chain, the application can use a cryptographic hash/fingerprint as the document's proof of integrity.
+Traditional notarization generally requires a trusted third party. This project demonstrates how blockchain technology can be used to create a verifiable digital proof without storing the entire document on the blockchain.
 
-This provides a practical Web3 approach to document notarization while avoiding unnecessary blockchain storage costs.
+Instead of storing the document itself, the application calculates a unique **SHA-256 hash**.
 
-### Core Concept
+For example:
 
 ```text
 Document
    |
    v
-Cryptographic Hash
+SHA-256
    |
    v
-Blockchain Transaction
-   |
-   v
-Immutable Timestamp / Proof
-   |
-   v
-Later Verification
+0x7f3c...a91d
 ````
 
-If the document is modified after notarization, its newly calculated hash will differ from the original blockchain record.
+The resulting hash acts as the document's digital fingerprint.
+
+The blockchain stores the fingerprint together with:
+
+* Document owner
+* Blockchain timestamp
+* Description
+* IPFS CID, if available
+
+Therefore, the original document does not need to be stored directly on-chain.
 
 ---
 
 # Problem Statement
 
-Traditional document verification systems may depend on:
+Digital documents can be modified after they are created.
 
-* Centralized databases
-* Manual verification
-* Trusted third parties
-* Paper-based certificates
-* Centralized timestamps
-* Proprietary verification systems
+For example:
 
-A blockchain-based notarization system provides an alternative approach by recording a cryptographic fingerprint of the document on a blockchain.
+```text
+Original document
+       |
+       | modification
+       v
+Modified document
+```
 
-The blockchain can act as a tamper-resistant public record containing information necessary to verify the document's integrity.
+It can be difficult to prove:
+
+* Which version was the original?
+* When did the document exist?
+* Who registered it?
+* Whether the document was changed after registration?
+
+A centralized database can also introduce a dependency on the organization operating that database.
+
+The objective of this project is to create a blockchain-based mechanism that allows a user to generate and verify a tamper-evident document fingerprint.
+
+---
+
+# Solution
+
+The application uses the following approach:
+
+```text
+                DOCUMENT
+                    |
+                    v
+             SHA-256 HASH
+                    |
+             +------+------+
+             |             |
+             v             v
+        Blockchain       IPFS
+        fingerprint     optional copy
+             |
+             v
+       Verification
+```
+
+Only the document fingerprint and metadata are recorded on-chain.
+
+The actual document can optionally be stored on IPFS.
 
 ---
 
 # Key Features
 
-The application is designed around the following functionality:
+## 1. SHA-256 Document Fingerprinting
 
-* Document notarization
-* Cryptographic document fingerprinting
-* Blockchain-based proof
-* Document verification
-* Web3 wallet interaction
-* Transaction-based notarization
-* Timestamp/proof verification
-* Modern React-based frontend
-* Backend API service
-* Local development support
-* Cloud development support through platforms such as Replit
+The document is hashed locally in the browser.
+
+The application displays:
+
+```text
+SHA-256 · calculated locally
+```
+
+The hash is a 64-character hexadecimal value represented with the `0x` prefix when used as a blockchain `bytes32` value.
 
 ---
 
-# How It Works
+## 2. Blockchain Notarization
 
-The application follows a simple workflow.
+The document hash can be registered through the `Notary` smart contract.
 
-## Step 1 — Upload Document
-
-The user selects a document through the web interface.
-
-```text
-User
- |
- v
-Upload Document
-```
-
-## Step 2 — Generate Document Hash
-
-The document is processed to generate a cryptographic hash.
-
-```text
-Document
-    |
-    v
-Hash Function
-    |
-    v
-Document Hash
-```
-
-The hash acts as a unique fingerprint of the document contents.
-
-For example:
-
-```text
-Document A
-    |
-    v
-SHA-256
-    |
-    v
-abc123...xyz
-```
-
-If even a small portion of the document changes, the resulting hash will normally change.
-
----
-
-## Step 3 — Create Blockchain Proof
-
-The generated document hash is associated with a blockchain transaction or smart-contract record.
+The transaction records:
 
 ```text
 Document Hash
-      |
-      v
-Web3 Provider
-      |
-      v
-Smart Contract
-      |
-      v
-Blockchain
+Owner
+Timestamp
+Description
+IPFS CID
 ```
 
 ---
 
-## Step 4 — Store Transaction Information
+## 3. Duplicate Protection
 
-The application can retain information required for later verification, such as:
+The smart contract prevents the same document hash from being notarized more than once.
 
-* Document hash
-* Blockchain transaction hash
-* Contract address
-* Network/chain information
-* Timestamp information
-* Verification status
+This prevents accidental duplicate notarization of the same fingerprint.
 
 ---
 
-## Step 5 — Verify Document
+## 4. Document Verification
 
-When a user wants to verify a document:
+A user can:
+
+* Upload the original document again, or
+* Enter its SHA-256 hash manually.
+
+The application calculates/checks the hash and queries the smart contract.
+
+---
+
+## 5. Owner Information
+
+The notarization record contains the Ethereum address that registered the document.
+
+---
+
+## 6. Blockchain Timestamp
+
+The smart contract records the timestamp associated with the notarization.
+
+---
+
+## 7. Optional IPFS Storage
+
+The project can upload the document to IPFS and store the resulting CID with the blockchain record.
+
+The application can then provide an IPFS link such as:
 
 ```text
-Original Document
-       |
-       v
-Calculate Hash
-       |
-       v
-Compare with Blockchain Record
-       |
-       v
-Match?
-  /       \
-Yes       No
- |         |
-Valid    Modified/
-Proof    Different
+https://gateway.pinata.cloud/ipfs/<CID>
 ```
 
-If the calculated hash matches the blockchain record, the document contents correspond to the notarized version.
+IPFS storage is optional. The blockchain hash remains the core proof.
 
 ---
 
-# System Architecture
+## 8. Local Hardhat Network
 
-The overall system can be represented as follows:
+The project can be tested locally using Hardhat.
+
+The local chain uses:
 
 ```text
-                         WEB3 DOCUMENT NOTARY
-                                  |
-             +--------------------+--------------------+
-             |                    |                    |
-             v                    v                    v
-        React Frontend        Backend API          Blockchain
-             |                    |                    |
-             |                    |                    |
-             v                    v                    v
-        User Interface       API Services        Smart Contract
-             |                    |                    |
-             |                    |                    |
-             +----------+---------+                    |
-                        |                              |
-                        v                              |
-                 Document Hash                         |
-                        |                              |
-                        +------------------------------+
-                                       |
-                                       v
-                              Blockchain Record
+Chain ID: 31337
 ```
 
 ---
 
-# Application Architecture
+## 9. Ethereum Sepolia
 
-The project follows a workspace/monorepo architecture.
+The application also supports:
 
 ```text
-                         +----------------------+
-                         |       Browser        |
-                         |                      |
-                         |  React Web Frontend  |
-                         +----------+-----------+
-                                    |
-                                    |
-                             HTTP / API Calls
-                                    |
-                                    v
-                         +----------------------+
-                         |    API Server        |
-                         |                      |
-                         |  Node.js / Express   |
-                         +----------+-----------+
-                                    |
-                                    |
-                                    v
-                         +----------------------+
-                         |   Shared Libraries   |
-                         |                      |
-                         | API Client / Zod     |
-                         | API Specification    |
-                         +----------+-----------+
-                                    |
-                                    |
-                                    v
-                         +----------------------+
-                         |      Web3 Layer      |
-                         |                      |
-                         | Wallet / Provider    |
-                         +----------+-----------+
-                                    |
-                                    |
-                                    v
-                         +----------------------+
-                         |     Blockchain       |
-                         |                      |
-                         | Smart Contract       |
-                         +----------------------+
+Chain ID: 11155111
 ```
+
+which is the Ethereum Sepolia test network.
 
 ---
 
 # Technology Stack
 
-## Frontend
+| Technology   | Purpose                                               |
+| ------------ | ----------------------------------------------------- |
+| React        | Frontend UI                                           |
+| TypeScript   | Frontend programming language                         |
+| Vite         | Frontend development/build tool                       |
+| ethers.js    | Ethereum/Web3 interaction                             |
+| Solidity     | Smart contract                                        |
+| Hardhat      | Contract compilation and local blockchain development |
+| Ethereum     | Blockchain                                            |
+| Sepolia      | Public Ethereum testnet                               |
+| MetaMask     | Web3 wallet                                           |
+| SHA-256      | Document fingerprinting                               |
+| IPFS         | Optional decentralized document storage               |
+| Pinata       | IPFS pinning service                                  |
+| Tailwind CSS | UI styling                                            |
+| Lucide React | Icons                                                 |
+| Wouter       | Frontend routing                                      |
 
-The frontend is implemented using modern web technologies.
+---
 
-* React
-* TypeScript
-* Vite
-* Tailwind CSS
-* Web3 integration
-* Modern component-based UI
+# Architecture
 
-Frontend package:
+The application consists of four major layers.
 
 ```text
-@workspace/document-notary
++---------------------------------------------------+
+|                  USER / BROWSER                   |
++---------------------------------------------------+
+                       |
+                       v
++---------------------------------------------------+
+|                REACT FRONTEND                    |
+|                                                   |
+|  Document Upload                                  |
+|  SHA-256 Hashing                                  |
+|  Verification                                     |
+|  Wallet Connection                                |
++---------------------------------------------------+
+             |                         |
+             |                         |
+             v                         v
++-----------------------+     +--------------------+
+|      IPFS / Pinata    |     | Ethereum / Hardhat |
+|                       |     |                    |
+| Optional document     |     | Notary Contract    |
+| storage               |     |                    |
++-----------------------+     +--------------------+
+                                      |
+                                      v
+                              Blockchain Record
 ```
 
 ---
 
-## Backend
+# Application Flow
 
-The backend provides API functionality required by the application.
-
-* Node.js
-* TypeScript
-* API server
-* Zod/API schema integration
-* pnpm workspace
-
-Backend package:
+## Notarization Flow
 
 ```text
-@workspace/api-server
+User
+ |
+ | Select document
+ v
+Frontend
+ |
+ | Calculate SHA-256
+ v
+Document Hash
+ |
+ +------------------------+
+ |                        |
+ | Optional               |
+ v                        v
+IPFS Upload          Connect MetaMask
+ |                        |
+ | CID                    |
+ +-----------+------------+
+             |
+             v
+      Notary Contract
+             |
+             |
+             v
+      Blockchain Record
+             |
+             v
+       Transaction Hash
 ```
 
 ---
 
-## Shared Libraries
+# How Document Notarization Works
 
-The repository contains reusable workspace packages for communication between frontend and backend.
-
-Important packages include:
+Suppose the user has:
 
 ```text
-@workspace/api-client-react
-@workspace/api-spec
-@workspace/api-zod
-@workspace/db
-@workspace/scripts
+certificate.pdf
+```
+
+The browser calculates:
+
+```text
+SHA-256(certificate.pdf)
+```
+
+Result:
+
+```text
+0xABC123........................................789
+```
+
+The hash is sent to the smart contract:
+
+```solidity
+notarize(
+    docHash,
+    description,
+    ipfsCID
+)
+```
+
+The contract records the document information.
+
+Conceptually:
+
+```text
+Document Hash
+      |
+      v
++---------------------------+
+| Notary Smart Contract     |
++---------------------------+
+| owner                     |
+| timestamp                 |
+| description               |
+| ipfsCID                   |
++---------------------------+
 ```
 
 ---
 
-## Development Environment
+# How Verification Works
 
-The project uses:
+Verification does not require uploading the document to the blockchain.
 
-* pnpm
-* TypeScript
-* Vite
-* Node.js
-* Replit-compatible development tooling
+Suppose the user has:
+
+```text
+certificate.pdf
+```
+
+again.
+
+The browser calculates:
+
+```text
+SHA-256(certificate.pdf)
+```
+
+If the document has not changed:
+
+```text
+Original hash
+      =
+New hash
+```
+
+The application queries:
+
+```solidity
+verify(docHash)
+```
+
+and retrieves the notarization record using:
+
+```solidity
+getNotarization(docHash)
+```
+
+The record contains:
+
+```text
+Owner
+Timestamp
+Description
+IPFS CID
+```
 
 ---
 
-# Project Structure
+## If the document was modified
 
-The repository follows a workspace-based structure similar to:
+Even a small modification changes the SHA-256 hash.
+
+For example:
 
 ```text
-Web3-Document-Notary-dApp/
-│
-├── artifacts/
-│   │
-│   ├── api-server/
-│   │   ├── src/
-│   │   ├── dist/
-│   │   ├── package.json
-│   │   └── build.mjs
-│   │
-│   ├── document-notary/
-│   │   ├── src/
-│   │   ├── public/
-│   │   ├── index.html
-│   │   ├── vite.config.ts
-│   │   └── package.json
-│   │
-│   └── mockup-sandbox/
-│
-├── lib/
-│   │
-│   ├── api-client-react/
-│   ├── api-spec/
-│   ├── api-zod/
-│   └── db/
-│
-├── scripts/
-│
-├── attached_assets/
-│
-├── package.json
-├── pnpm-lock.yaml
-└── README.md
+Original:
+0xABC123...
+
+Modified:
+0x9827FA...
 ```
 
-> The exact files and folders may change as the project evolves.
+Because the hashes differ, the modified document will not match the original blockchain fingerprint.
+
+---
+
+# Smart Contract
+
+The main contract is:
+
+```text
+contracts/Notary.sol
+```
+
+The generated Hardhat artifact is:
+
+```text
+artifacts/contracts/Notary.sol/Notary.json
+```
+
+The artifact contains the ABI used by the frontend.
+
+---
+
+# Document Structure
+
+The contract uses a document record containing:
+
+```text
+owner
+timestamp
+description
+ipfsCID
+```
+
+Conceptually:
+
+```solidity
+struct Document {
+    address owner;
+    uint256 timestamp;
+    string description;
+    string ipfsCID;
+}
+```
+
+The document hash is used as the lookup key.
+
+Conceptually:
+
+```text
+docHash
+   |
+   v
+Document Record
+   |
+   +-- owner
+   +-- timestamp
+   +-- description
+   +-- ipfsCID
+```
+
+---
+
+# Smart Contract Functions
+
+## `notarize()`
+
+Registers a document hash.
+
+```solidity
+notarize(
+    bytes32 docHash,
+    string description,
+    string ipfsCID
+)
+```
+
+Parameters:
+
+| Parameter     | Type      | Description                  |
+| ------------- | --------- | ---------------------------- |
+| `docHash`     | `bytes32` | SHA-256 document fingerprint |
+| `description` | `string`  | Description of the document  |
+| `ipfsCID`     | `string`  | Optional IPFS CID            |
+
+---
+
+## `verify()`
+
+Checks whether a hash has been notarized.
+
+```solidity
+verify(bytes32 docHash)
+```
+
+Returns:
+
+```text
+true
+```
+
+if the document exists in the contract.
+
+Otherwise:
+
+```text
+false
+```
+
+---
+
+## `getNotarization()`
+
+Retrieves the complete notarization record.
+
+```solidity
+getNotarization(bytes32 docHash)
+```
+
+The Solidity function returns a `Document` struct containing:
+
+```text
+owner
+timestamp
+description
+ipfsCID
+```
+
+### Important frontend ABI requirement
+
+Because `getNotarization()` returns a Solidity struct, its ABI must represent the return value as a tuple.
+
+The frontend uses the equivalent tuple representation:
+
+```text
+function getNotarization(bytes32 docHash)
+view returns (
+    (address owner,
+     uint256 timestamp,
+     string description,
+     string ipfsCID)
+)
+```
+
+This was important during development because an ABI mismatch caused the frontend to fail when reading the notarization record.
+
+---
+
+# Frontend
+
+The primary frontend file is:
+
+```text
+src/App.tsx
+```
+
+The frontend handles:
+
+* Document selection
+* SHA-256 hashing
+* Wallet connection
+* Network checking
+* Contract interaction
+* Notarization
+* Verification
+* IPFS integration
+* Transaction information
+* Error handling
+
+---
+
+# Wallet Integration
+
+The application uses the browser Ethereum provider:
+
+```text
+window.ethereum
+```
+
+A wallet such as MetaMask provides this provider.
+
+The frontend uses ethers.js to create a provider:
+
+```text
+BrowserProvider
+```
+
+and interact with the smart contract.
+
+---
+
+# Supported Networks
+
+The application currently recognizes:
+
+```text
+31337    Hardhat Local
+11155111 Sepolia
+```
+
+## Hardhat Local
+
+```text
+Chain ID: 31337
+```
+
+Used during local development.
+
+## Sepolia
+
+```text
+Chain ID: 11155111
+```
+
+Used for public testnet deployment.
+
+---
+
+# IPFS Integration
+
+IPFS stands for:
+
+```text
+InterPlanetary File System
+```
+
+It provides content-addressed storage.
+
+Instead of identifying a file using a conventional filename, IPFS identifies content using a CID.
+
+Example:
+
+```text
+File
+ |
+ v
+IPFS
+ |
+ v
+CID
+ |
+ v
+Qm...
+```
+
+The CID can then be stored in the smart contract.
+
+---
+
+## Pinata
+
+This project can use Pinata as the IPFS pinning service.
+
+The frontend can display:
+
+```text
+Open IPFS copy
+```
+
+which points to:
+
+```text
+https://gateway.pinata.cloud/ipfs/<CID>
+```
+
+### Where to get Pinata credentials
+
+Create an account on Pinata:
+
+```text
+https://pinata.cloud/
+```
+
+Then create an API key/JWT from the Pinata dashboard.
+
+Do not commit the Pinata secret to GitHub.
+
+---
+
+# APIs and External Services
+
+## 1. MetaMask / Ethereum Provider API
+
+### Purpose
+
+Used for:
+
+* Connecting the user's wallet
+* Reading the connected account
+* Detecting the blockchain network
+* Asking the user to sign blockchain transactions
+
+### Where to get it
+
+Install MetaMask:
+
+```text
+https://metamask.io/
+```
+
+No API key is required.
+
+The browser exposes:
+
+```text
+window.ethereum
+```
+
+---
+
+# 2. Ethereum Sepolia
+
+### Purpose
+
+Public blockchain used for testing the deployed smart contract.
+
+Network:
+
+```text
+Sepolia
+```
+
+Chain ID:
+
+```text
+11155111
+```
+
+### Requirement
+
+The wallet needs Sepolia ETH for transaction gas.
+
+Sepolia ETH can be obtained from a Sepolia faucet.
+
+Do not use real ETH for testing this application.
+
+---
+
+# 3. Hardhat
+
+### Purpose
+
+Hardhat is used for:
+
+* Solidity compilation
+* Local blockchain
+* Contract deployment
+* Contract testing
+* Development
+
+Hardhat local network:
+
+```text
+Chain ID: 31337
+```
+
+No external API key is required for the local network.
+
+---
+
+# 4. ethers.js
+
+### Purpose
+
+ethers.js connects the React frontend to Ethereum.
+
+The application uses it for:
+
+```text
+BrowserProvider
+Contract
+Transactions
+Contract calls
+```
+
+No API key is required when communicating through MetaMask.
+
+---
+
+# 5. Pinata
+
+### Purpose
+
+Optional IPFS file upload and pinning.
+
+Required only if the IPFS functionality is enabled.
+
+Credentials should be stored in environment variables and never committed.
+
+---
+
+# 6. Etherscan
+
+Etherscan can be used to inspect public Sepolia transactions and deployed contracts.
+
+Sepolia explorer:
+
+```text
+https://sepolia.etherscan.io/
+```
+
+An Etherscan API key may be useful for automated verification or explorer-related tooling, but it is not required for normal wallet-based contract interaction.
+
+---
+
+# Environment Variables
+
+Create a `.env` file based on:
+
+```text
+.env.example
+```
+
+A typical configuration contains values similar to:
+
+```env
+VITE_NOTARY_CONTRACT_ADDRESS_LOCAL=0xYourLocalContractAddress
+
+VITE_NOTARY_CONTRACT_ADDRESS_SEPOLIA=0xYourSepoliaContractAddress
+
+VITE_EXPECTED_CHAIN_ID=11155111
+```
+
+If IPFS credentials are required by the application/server integration, configure them through environment variables rather than hard-coding them.
+
+Example:
+
+```env
+PINATA_JWT=your_pinata_jwt
+```
+
+Use the actual variable names expected by the implementation.
+
+---
+
+# Important `.env` Rule
+
+Never commit:
+
+```text
+Private keys
+Wallet seed phrases
+Pinata secrets
+API secrets
+RPC secrets
+```
+
+to GitHub.
+
+Use:
+
+```text
+.env
+```
+
+and add it to:
+
+```text
+.gitignore
+```
+
+Keep:
+
+```text
+.env.example
+```
+
+in the repository with placeholder values.
 
 ---
 
 # Prerequisites
 
-Before running the project locally, install the following.
+Before running the project, install:
 
 ## Node.js
 
-Recommended:
+Use a current supported Node.js version compatible with the project's dependencies.
 
-```text
-Node.js 20+
-```
-
-Check the installed version:
+Check:
 
 ```bash
 node --version
@@ -421,32 +935,48 @@ node --version
 
 ## pnpm
 
-Install pnpm if it is not already installed:
-
-```bash
-npm install -g pnpm
-```
-
-Verify:
+Check:
 
 ```bash
 pnpm --version
+```
+
+If pnpm is not installed, enable Corepack:
+
+```bash
+corepack enable
+```
+
+Then:
+
+```bash
+corepack prepare pnpm@latest --activate
+```
+
+---
+
+## MetaMask
+
+Install the MetaMask browser extension:
+
+```text
+https://metamask.io/
 ```
 
 ---
 
 # Installation
 
-Clone the repository:
+Clone the project:
 
 ```bash
-git clone https://github.com/Anos999/Web3-Document-Notary-dApp.git
+git clone <YOUR_REPOSITORY_URL>
 ```
 
 Enter the project:
 
 ```bash
-cd Web3-Document-Notary-dApp
+cd document-notary
 ```
 
 Install dependencies:
@@ -457,895 +987,1423 @@ pnpm install
 
 ---
 
-# Environment Variables
+# Running the Project Locally
 
-The project uses environment variables for runtime configuration.
+## Step 1: Start Hardhat
 
-The frontend development server requires:
+Start the local blockchain:
+
+```bash
+npx hardhat node
+```
+
+The local network uses:
 
 ```text
-PORT
-BASE_PATH
+Chain ID: 31337
 ```
+
+Keep this terminal running.
+
+---
+
+# Step 2: Deploy the Contract
+
+Deploy the `Notary` contract to the local Hardhat network.
+
+Use the project's deployment script:
+
+```bash
+node scripts/deploy.cjs
+```
+
+If the deployment script requires Hardhat explicitly:
+
+```bash
+npx hardhat run scripts/deploy.cjs --network localhost
+```
+
+After deployment, copy the resulting contract address.
 
 Example:
 
-```bash
-PORT=3000
-BASE_PATH=/
-```
-
-The API server requires:
-
 ```text
-PORT
-```
-
-Example:
-
-```bash
-PORT=5000
+Notary deployed to:
+0x1234567890123456789012345678901234567890
 ```
 
 ---
 
-# Running Locally
+# Step 3: Configure the Contract Address
 
-## 1. Install dependencies
+Set the local contract address in `.env`:
 
-```bash
-pnpm install
+```env
+VITE_NOTARY_CONTRACT_ADDRESS_LOCAL=0x1234567890123456789012345678901234567890
 ```
 
 ---
 
-## 2. Start the API server
+# Step 4: Configure MetaMask
+
+Add the local Hardhat network to MetaMask.
+
+Typical configuration:
+
+```text
+Network Name: Hardhat Local
+RPC URL: http://127.0.0.1:8545
+Chain ID: 31337
+Currency Symbol: ETH
+```
+
+Import one of the development accounts generated by Hardhat if necessary.
+
+### Warning
+
+Hardhat development private keys are for local testing only.
+
+Never use a Hardhat private key with real funds.
+
+---
+
+# Step 5: Start the Frontend
 
 Run:
 
 ```bash
-PORT=5000 pnpm --filter @workspace/api-server run dev
+pnpm dev
 ```
 
-The API server should start on:
-
-```text
-http://localhost:5000
-```
-
-Expected output:
-
-```text
-Server listening
-port: 5000
-```
-
----
-
-## 3. Start the frontend
-
-Open another terminal.
-
-Run:
-
-```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
-```
-
-Expected output:
-
-```text
-VITE ... ready
-
-Local:   http://localhost:3000/
-Network: http://0.0.0.0:3000/
-```
-
-Open:
+The Vite development server should provide a local URL similar to:
 
 ```text
 http://localhost:3000
 ```
 
+Open the URL in the browser.
+
 ---
 
-# Running on Replit
+# Running the Application
 
-The project can also be developed and run using Replit.
-
-The repository uses a workspace structure containing separate frontend and API services.
-
-## Step 1 — Import the repository
-
-Create a Replit workspace and import the GitHub repository:
+The normal workflow is:
 
 ```text
-https://github.com/Anos999/Web3-Document-Notary-dApp
-```
-
-Alternatively, clone it from the Replit Shell:
-
-```bash
-git clone https://github.com/Anos999/Web3-Document-Notary-dApp.git
-cd Web3-Document-Notary-dApp
+Start Hardhat
+     |
+     v
+Deploy Notary
+     |
+     v
+Configure contract address
+     |
+     v
+Start frontend
+     |
+     v
+Open browser
+     |
+     v
+Connect MetaMask
+     |
+     v
+Notarize / Verify
 ```
 
 ---
 
-## Step 2 — Install dependencies
+# Using Sepolia Testnet
 
-Run:
+To use Sepolia instead of the local network:
 
-```bash
-pnpm install
-```
+1. Deploy the contract to Sepolia.
+2. Copy the deployed contract address.
+3. Put the address in the environment configuration.
+4. Connect MetaMask to Sepolia.
+5. Obtain Sepolia ETH.
+6. Start the frontend.
+7. Select/notarize a document.
 
----
-
-## Step 3 — Verify workspace packages
-
-Run:
-
-```bash
-pnpm -r list --depth -1
-```
-
-You should see packages similar to:
+The application recognizes:
 
 ```text
-@workspace/api-server
-@workspace/document-notary
-@workspace/mockup-sandbox
-@workspace/api-client-react
-@workspace/api-spec
-@workspace/api-zod
-@workspace/db
-@workspace/scripts
+11155111
 ```
+
+as the Sepolia chain ID.
 
 ---
 
-# Running the Frontend on Replit
+# Deploying the Smart Contract to Sepolia
 
-The frontend uses Vite and requires both `PORT` and `BASE_PATH`.
+You need:
 
-Run:
+* A wallet/private key for deployment
+* Sepolia ETH
+* An RPC endpoint
+
+Use an RPC provider such as:
+
+* Alchemy
+* Infura
+* QuickNode
+* Another Ethereum-compatible RPC provider
+
+Create an account with the selected provider and create a Sepolia endpoint.
+
+The exact deployment configuration should be kept in environment variables.
+
+Example:
+
+```env
+SEPOLIA_RPC_URL=https://your-sepolia-rpc-url
+DEPLOYER_PRIVATE_KEY=your_private_key
+```
+
+### Important
+
+Never commit the real value of:
+
+```text
+DEPLOYER_PRIVATE_KEY
+```
+
+to GitHub.
+
+---
+
+# Building the Frontend
+
+Create a production build:
 
 ```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
+pnpm build
 ```
 
-The Vite server should display:
+The output is generated in the project's configured distribution directory.
 
-```text
-VITE ... ready
-
-➜ Local:   http://localhost:3000/
-➜ Network: http://0.0.0.0:3000/
-```
-
----
-
-# Running the API Server on Replit
-
-Open a second Shell and run:
+To preview the production build:
 
 ```bash
-PORT=5000 pnpm --filter @workspace/api-server run dev
-```
-
-Expected output:
-
-```text
-Server listening
-port: 5000
+pnpm preview
 ```
 
 ---
 
-# Replit Port Configuration
+# Project Structure
 
-The application contains two development services:
+The important project files are organized approximately as follows:
 
 ```text
-Frontend
-Port 3000
-
-API Server
-Port 5000
+document-notary/
+│
+├── contracts/
+│   └── Notary.sol
+│
+├── artifacts/
+│   └── contracts/
+│       └── Notary.sol/
+│           ├── Notary.json
+│           └── Notary.dbg.json
+│
+├── cache/
+│   └── solidity-files-cache.json
+│
+├── scripts/
+│   └── deploy.cjs
+│
+├── src/
+│   ├── App.tsx
+│   ├── App.tsx.backup
+│   ├── index.css
+│   ├── main.tsx
+│   │
+│   ├── components/
+│   │   ├── error-boundary.tsx
+│   │   └── ui/
+│   │       └── ...
+│   │
+│   ├── hooks/
+│   │   ├── use-mobile.tsx
+│   │   └── use-toast.ts
+│   │
+│   └── pages/
+│       └── not-found.tsx
+│
+├── public/
+│   ├── favicon.svg
+│   └── robots.txt
+│
+├── dist/
+│   └── ...
+│
+├── .env
+├── .env.example
+├── hardhat.config.js
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── README.md
 ```
+
+---
+
+# End-to-End Example
+
+Suppose the user wants to notarize:
+
+```text
+degree-certificate.pdf
+```
+
+## Step 1 — Select the document
+
+The user selects:
+
+```text
+degree-certificate.pdf
+```
+
+---
+
+## Step 2 — Calculate hash
+
+The browser calculates:
+
+```text
+SHA-256(degree-certificate.pdf)
+```
+
+Example:
+
+```text
+0x91ab23....................................7ef2
+```
+
+The hash is displayed to the user.
+
+---
+
+## Step 3 — Optional IPFS upload
+
+The application uploads the document to IPFS.
+
+Example:
+
+```text
+CID:
+bafybeigdyr...
+```
+
+---
+
+## Step 4 — Connect wallet
+
+The user connects MetaMask.
+
+Example:
+
+```text
+0x1234...5678
+```
+
+---
+
+## Step 5 — Blockchain transaction
+
+The frontend calls:
+
+```solidity
+notarize(
+    documentHash,
+    "Degree Certificate",
+    ipfsCID
+)
+```
+
+The wallet asks the user to confirm the transaction.
+
+---
+
+## Step 6 — Blockchain stores proof
+
+The contract stores:
+
+```text
+Hash:
+0x91ab23...
+
+Owner:
+0x1234...5678
+
+Timestamp:
+<blockchain timestamp>
+
+Description:
+Degree Certificate
+
+IPFS CID:
+bafybeigdyr...
+```
+
+---
+
+# Verification Example
+
+Later, the user selects the same document.
+
+The application calculates:
+
+```text
+SHA-256(degree-certificate.pdf)
+```
+
+If the document has not changed:
+
+```text
+New hash
+    =
+Stored hash
+```
+
+The application retrieves:
+
+```text
+Owner
+Timestamp
+Description
+IPFS CID
+```
+
+The document can therefore be checked against the blockchain record.
+
+---
+
+# If the Document Changes
+
+Suppose the user edits:
+
+```text
+degree-certificate.pdf
+```
+
+Even if only one small part changes, the SHA-256 result will normally change.
+
+For example:
+
+```text
+Original:
+
+0x91ab23...7ef2
+
+
+Modified:
+
+0x4e72bd...112a
+```
+
+The new hash does not match the blockchain record.
+
+Therefore:
+
+```text
+Modified document
+        |
+        v
+Different SHA-256
+        |
+        v
+Does not match notarized fingerprint
+```
+
+---
+
+# Problems Faced and Solutions
+
+During development, several implementation issues were encountered.
+
+---
+
+## Problem 1 — Contract ABI and frontend mismatch
+
+### Problem
+
+The Solidity contract's:
+
+```solidity
+getNotarization()
+```
+
+returns a `Document` struct.
+
+The frontend initially described the return value as separate values:
+
+```text
+address owner,
+uint256 timestamp,
+string description,
+string ipfsCID
+```
+
+This did not correctly match the generated contract ABI.
+
+### Solution
+
+The generated Hardhat artifact was inspected:
+
+```text
+artifacts/contracts/Notary.sol/Notary.json
+```
+
+The ABI showed that the return value is a tuple containing:
+
+```text
+owner
+timestamp
+description
+ipfsCID
+```
+
+The frontend ABI was then corrected to represent the struct return value as a tuple.
+
+This allowed:
+
+```typescript
+notarization = await contract.getNotarization(clean);
+```
+
+to work correctly.
+
+---
+
+# Problem 2 — Finding the Correct ABI
+
+The generated ABI was verified using Node.js:
+
+```bash
+node -e "const x=require('./artifacts/contracts/Notary.sol/Notary.json'); console.log(JSON.stringify(x.abi.filter(x=>x.name==='getNotarization'),null,2))"
+```
+
+This is a useful debugging technique whenever frontend contract interaction behaves unexpectedly.
+
+---
+
+# Problem 3 — Local vs Public Network
+
+The application needs to distinguish between:
+
+```text
+Hardhat Local
+```
+
+and:
+
+```text
+Sepolia
+```
+
+### Solution
+
+The frontend recognizes:
+
+```text
+31337
+```
+
+and:
+
+```text
+11155111
+```
+
+as supported chains.
+
+The appropriate contract address is selected according to the active network.
+
+---
+
+# Problem 4 — Document Storage vs Blockchain Storage
+
+Storing complete documents directly on Ethereum would be inefficient and expensive.
+
+### Solution
+
+The application stores the document fingerprint rather than the complete document.
+
+The document can optionally be stored using IPFS.
 
 Architecture:
 
 ```text
-                 Replit Workspace
-                       |
-          +------------+------------+
-          |                         |
-          v                         v
-     Port 3000                  Port 5000
-          |                         |
-          v                         v
-    React + Vite                API Server
-     Frontend                   Backend
-```
-
-The frontend should be exposed through Replit's Preview/Ports interface.
-
----
-
-# Important Replit Configuration
-
-The frontend Vite configuration requires:
-
-```text
-PORT
-BASE_PATH
-```
-
-Therefore, this command is preferred:
-
-```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
-```
-
-Do not start the frontend with only:
-
-```bash
-pnpm --filter @workspace/document-notary run dev
-```
-
-because the Vite configuration explicitly requires the `PORT` environment variable.
-
-Similarly, do not omit `BASE_PATH`.
-
----
-
-# Verify the Frontend on Replit
-
-After starting the frontend, verify that Vite is responding.
-
-Run:
-
-```bash
-curl -I http://127.0.0.1:3000/
-```
-
-Expected result:
-
-```text
-HTTP/1.1 200 OK
-Content-Type: text/html
-```
-
-You can also inspect the returned HTML:
-
-```bash
-curl -s http://127.0.0.1:3000/ | head -30
-```
-
-If the command returns HTML, the Vite server itself is running correctly.
-
-Use Replit's **Ports/Preview** interface to access the externally exposed application.
-
----
-
-# Running Both Services
-
-The frontend and backend should be run simultaneously during development.
-
-## Terminal 1 — API
-
-```bash
-PORT=5000 pnpm --filter @workspace/api-server run dev
-```
-
-## Terminal 2 — Frontend
-
-```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
-```
-
-Architecture:
-
-```text
-                     USER
-                       |
-                       v
-              +----------------+
-              | React Frontend |
-              |    :3000       |
-              +-------+--------+
-                      |
-                      | API requests
-                      v
-              +----------------+
-              |   API Server   |
-              |     :5000      |
-              +-------+--------+
-                      |
-                      v
-              +----------------+
-              | Web3 / Storage |
-              | / Application  |
-              |    Services    |
-              +----------------+
-```
-
----
-
-# Production Build
-
-## Frontend
-
-Build the frontend using:
-
-```bash
-pnpm --filter @workspace/document-notary run build
-```
-
-The generated production files are placed under the frontend distribution directory configured by Vite.
-
----
-
-## API Server
-
-Build the API server:
-
-```bash
-pnpm --filter @workspace/api-server run build
-```
-
-Then start it with:
-
-```bash
-PORT=5000 pnpm --filter @workspace/api-server run start
-```
-
----
-
-# Document Notarization Workflow
-
-The expected notarization process is:
-
-```text
-              +------------------+
-              | Select Document  |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              | Generate Hash    |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              | Connect Wallet  |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              | Create Blockchain|
-              | Transaction      |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              | Blockchain       |
-              | Record           |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              | Transaction Hash |
-              +------------------+
-```
-
----
-
-# Document Verification Workflow
-
-A document can subsequently be verified by calculating its hash again.
-
-```text
-             Document to Verify
-                     |
-                     v
-             Generate Hash
-                     |
-                     v
-              Document Hash
-                     |
-                     v
-          Retrieve Blockchain
-               Record
-                     |
-                     v
-             Compare Hashes
-                     |
-            +--------+--------+
-            |                 |
-            v                 v
-          MATCH            DIFFERENT
-            |                 |
-            v                 v
-       Document          Document may
-       Verified          have changed
-```
-
----
-
-# API Architecture
-
-The project separates API functionality from the frontend.
-
-```text
-Frontend
+Document
    |
-   | HTTP
-   v
-API Client
+   +---- SHA-256 ----> Blockchain
    |
-   v
-API Specification
-   |
-   v
-Zod Validation
-   |
-   v
-API Server
-   |
-   v
-Database / Web3 / Services
+   +---- IPFS --------> Optional decentralized storage
 ```
 
-Relevant workspace packages include:
+---
+
+# Problem 5 — IPFS Dependency
+
+A document-notarization system should not depend entirely on IPFS being available.
+
+### Solution
+
+IPFS is treated as an optional layer.
+
+The important proof is the blockchain document hash.
+
+The application can therefore continue with a hash-only notarization if IPFS storage is unavailable.
+
+---
+
+# Problem 6 — Verifying a Document
+
+A file cannot simply be compared by its filename.
+
+For example:
 
 ```text
-@workspace/api-client-react
-@workspace/api-spec
-@workspace/api-zod
-@workspace/api-server
+document.pdf
 ```
 
-This separation allows the frontend and backend to evolve independently while maintaining shared API contracts.
+does not prove that the contents are identical.
+
+### Solution
+
+The application compares the SHA-256 fingerprint.
+
+```text
+File contents
+     |
+     v
+SHA-256
+     |
+     v
+bytes32 document hash
+```
+
+This provides content-based verification.
+
+---
+
+# Problem 7 — Secret/API Key Exposure
+
+Blockchain and IPFS integrations may require credentials.
+
+Putting secrets directly into source code would expose them.
+
+### Solution
+
+Credentials are placed in environment variables.
+
+Example:
+
+```env
+PINATA_JWT=...
+SEPOLIA_RPC_URL=...
+DEPLOYER_PRIVATE_KEY=...
+```
+
+and `.env` must not be committed.
+
+---
+
+# Important Requirements
+
+## Requirement 1 — MetaMask
+
+A Web3 wallet is required for user-signed blockchain transactions.
+
+Install:
+
+```text
+https://metamask.io/
+```
+
+---
+
+## Requirement 2 — Correct Network
+
+For local development:
+
+```text
+Chain ID = 31337
+```
+
+For Sepolia:
+
+```text
+Chain ID = 11155111
+```
+
+The wallet and contract must be on the same network.
+
+---
+
+## Requirement 3 — Correct Contract Address
+
+The frontend must use the address of the deployed `Notary` contract.
+
+Do not use an address from a different network.
+
+For example:
+
+```text
+Local contract address
+```
+
+must not be used while MetaMask is connected to:
+
+```text
+Sepolia
+```
+
+---
+
+## Requirement 4 — Sepolia ETH
+
+For Sepolia transactions, the wallet needs test ETH.
+
+The application does not provide real ETH.
+
+Use a Sepolia faucet for development/testing.
+
+---
+
+## Requirement 5 — IPFS Credentials
+
+IPFS functionality requires the appropriate Pinata credentials if Pinata is being used.
+
+Create them from the Pinata dashboard.
+
+Do not put credentials directly inside:
+
+```text
+App.tsx
+```
+
+---
+
+## Requirement 6 — ABI Must Match Contract
+
+Whenever the Solidity contract changes, regenerate the Hardhat artifacts:
+
+```bash
+npx hardhat compile
+```
+
+Then verify that the frontend ABI matches the deployed contract.
 
 ---
 
 # Security Considerations
 
-## Do Not Store Private Keys in Source Code
+## Do Not Store Private Keys in the Frontend
 
-Never commit:
+Never write:
 
-```text
-PRIVATE_KEY
-MNEMONIC
-SEED_PHRASE
-API_SECRET
-DATABASE_PASSWORD
+```typescript
+const privateKey = "0x...";
 ```
 
-to GitHub.
-
-Use environment variables or the secret-management functionality provided by the deployment platform.
+inside frontend code.
 
 ---
 
-## Do Not Store Complete Documents On-Chain Unless Required
+## Do Not Commit `.env`
 
-Blockchain storage is expensive and generally unsuitable for storing large documents.
-
-A common architecture is:
+Use:
 
 ```text
-Document
-   |
-   +----> Off-chain storage
-   |
-   +----> Hash
-             |
-             v
-        Blockchain
+.env.example
 ```
 
-The blockchain stores the proof/fingerprint rather than the entire document.
+for documentation.
+
+Use:
+
+```text
+.env
+```
+
+for actual local secrets.
 
 ---
 
-## Validate Uploaded Files
+## Do Not Use Real Funds for Local Testing
 
-Production deployments should validate:
+Hardhat development accounts are intended for local development.
 
-* File type
-* File size
-* File extension
-* File content
-* Malicious uploads
+Never transfer real funds to development accounts.
 
 ---
 
-## Validate Blockchain Network
+## Do Not Put Sensitive Documents on Public IPFS
 
-The frontend and backend should use the intended blockchain network.
+IPFS content can be publicly accessible depending on the gateway/pinning configuration.
 
-Before production deployment, verify:
+Do not upload confidential documents unless you understand the privacy implications.
+
+For sensitive documents, consider encrypting the document before decentralized storage.
+
+---
+
+# Important Security Concept
+
+The application stores a fingerprint rather than the actual document on-chain.
+
+Therefore:
 
 ```text
-Chain ID
-RPC URL
-Contract Address
-Contract ABI
-Wallet Network
+Blockchain:
+    Hash
+    Owner
+    Timestamp
+    Description
+    CID
 ```
+
+rather than:
+
+```text
+Blockchain:
+    Complete PDF/DOCX/etc.
+```
+
+This reduces on-chain data storage and avoids directly putting the complete document into the blockchain state.
 
 ---
 
 # Troubleshooting
 
-## Error: PORT environment variable is required
+## Frontend cannot connect to contract
 
-If you see:
-
-```text
-Error: PORT environment variable is required but was not provided.
-```
-
-start the frontend with:
-
-```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
-```
-
-For the API:
-
-```bash
-PORT=5000 pnpm --filter @workspace/api-server run dev
-```
-
----
-
-## Error: BASE_PATH environment variable is required
-
-Use:
-
-```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
-```
-
----
-
-## Replit says "We couldn't reach the app"
-
-First verify that Vite is actually running:
-
-```bash
-curl -I http://127.0.0.1:3000/
-```
-
-If you receive:
+Check:
 
 ```text
-HTTP/1.1 200 OK
+1. MetaMask is installed.
+2. MetaMask is connected.
+3. Correct network is selected.
+4. Contract address is correct.
+5. Contract is deployed.
+6. ABI matches the deployed contract.
 ```
-
-the local Vite server is responding.
-
-Then check Replit's **Ports** panel and make sure port `3000` is exposed.
 
 ---
 
-## Check listening ports
+## `getNotarization()` fails
 
-Run:
+Check the ABI first.
+
+Inspect the generated ABI:
 
 ```bash
-ss -lntp
+node -e "const x=require('./artifacts/contracts/Notary.sol/Notary.json'); console.log(JSON.stringify(x.abi.filter(x=>x.name==='getNotarization'),null,2))"
 ```
 
-You should see entries corresponding to the frontend and/or API server.
+Confirm that the frontend ABI correctly represents the Solidity struct as a tuple.
 
 ---
 
-## Check frontend files
+## Transaction is rejected
 
-Run:
-
-```bash
-find artifacts/document-notary/src -maxdepth 2 -type f | sort
-```
-
----
-
-## Check frontend HTML
-
-Run:
-
-```bash
-cat artifacts/document-notary/index.html
-```
-
----
-
-## Check Vite configuration
-
-The frontend Vite configuration is located at:
+Check:
 
 ```text
-artifacts/document-notary/vite.config.ts
+Wallet balance
+Network
+Contract address
+Contract state
+User account
 ```
 
-The development server is configured to listen on:
+On Sepolia, make sure the wallet contains enough Sepolia ETH.
+
+---
+
+## MetaMask shows the wrong network
+
+Check the chain ID.
+
+Local:
 
 ```text
-0.0.0.0
+31337
 ```
 
-which allows cloud development environments such as Replit to expose the server.
-
----
-
-# Deployment Options
-
-The application can be deployed using multiple hosting approaches.
-
-## Local Development
+Sepolia:
 
 ```text
-Developer Machine
-       |
-       +-- Frontend :3000
-       |
-       +-- API :5000
-       |
-       +-- Blockchain
+11155111
 ```
 
 ---
 
-## Replit
+## IPFS upload fails
+
+Check:
 
 ```text
-Replit
-  |
-  +-- Frontend :3000
-  |
-  +-- API :5000
-  |
-  +-- External Blockchain
+Pinata credentials
+Network connection
+API limits
+CID returned by the service
 ```
 
----
-
-## Frontend Cloud Deployment
-
-The frontend can be deployed to platforms supporting Vite/React applications.
-
-Examples include:
-
-* Vercel
-* Netlify
-* Cloudflare Pages
-* Static hosting services
+Remember that IPFS is optional for the core blockchain fingerprinting functionality.
 
 ---
 
-## Backend Cloud Deployment
+## Hash verification fails
 
-The API server can be deployed to a Node.js-compatible hosting platform.
+Make sure the exact same document is being tested.
 
-Examples include:
+Changing any content can produce a different SHA-256 hash.
 
-* Replit
-* Render
-* Railway
-* Fly.io
-* VPS/cloud servers
-
-The exact deployment configuration depends on the required database, blockchain RPC provider, storage system, and environment variables.
-
----
-
-# Recommended Production Architecture
-
-A production deployment can use the following architecture:
+Check:
 
 ```text
-                         INTERNET
-                             |
-                             v
-                    +----------------+
-                    | Web Application |
-                    | React + Vite    |
-                    +--------+-------+
-                             |
-                             | HTTPS
-                             v
-                    +----------------+
-                    | Backend API    |
-                    | Node.js        |
-                    +--------+-------+
-                             |
-                +------------+------------+
-                |                         |
-                v                         v
-        +---------------+         +---------------+
-        | Database      |         | Blockchain    |
-        | Metadata      |         | Smart Contract|
-        +---------------+         +---------------+
-                                         |
-                                         v
-                                  Immutable Proof
+Original document
+        |
+        v
+Original SHA-256
+```
+
+against:
+
+```text
+Current document
+        |
+        v
+Current SHA-256
 ```
 
 ---
 
-# Development Guidelines
+# Development Debugging Commands
 
-## Install Dependencies
-
-```bash
-pnpm install
-```
-
-## Check Workspace
+## Check Contract ABI
 
 ```bash
-pnpm -r list --depth -1
+node -e "const x=require('./artifacts/contracts/Notary.sol/Notary.json'); console.log(JSON.stringify(x.abi,null,2))"
 ```
 
-## Run Frontend
+---
+
+## Check only `getNotarization`
 
 ```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
+node -e "const x=require('./artifacts/contracts/Notary.sol/Notary.json'); console.log(JSON.stringify(x.abi.filter(x=>x.name==='getNotarization'),null,2))"
 ```
 
-## Run API
+---
+
+## Compile Solidity
 
 ```bash
-PORT=5000 pnpm --filter @workspace/api-server run dev
+npx hardhat compile
 ```
 
-## Build Frontend
+---
+
+## Start Hardhat
 
 ```bash
-pnpm --filter @workspace/document-notary run build
+npx hardhat node
 ```
 
-## Build API
+---
+
+## Start Frontend
 
 ```bash
-pnpm --filter @workspace/api-server run build
+pnpm dev
 ```
+
+---
+
+## Production Build
+
+```bash
+pnpm build
+```
+
+---
+
+# Limitations
+
+The current application has several limitations.
+
+## 1. SHA-256 Proves Content Identity, Not Legal Validity
+
+A blockchain timestamp does not automatically establish the legal validity of the document.
+
+It provides a verifiable blockchain record associated with the document fingerprint.
+
+---
+
+## 2. IPFS Does Not Automatically Guarantee Privacy
+
+A CID is content-addressed and may be accessible through public gateways.
+
+Sensitive documents should not be uploaded without appropriate protection.
+
+---
+
+## 3. Blockchain Transactions Require Gas
+
+Public blockchain notarization requires transaction fees.
+
+Sepolia avoids real-value transactions during testing because it is a testnet.
+
+---
+
+## 4. Wallet Dependency
+
+Users need a compatible Web3 wallet to sign transactions.
+
+---
+
+## 5. Local Blockchain Data Is Temporary
+
+Hardhat local blockchain state is intended for development and testing.
+
+It should not be treated as permanent production storage.
 
 ---
 
 # Future Improvements
 
-Potential future improvements include:
+Possible future enhancements include:
 
-* Multi-chain blockchain support
-* IPFS-based document storage
-* Wallet-based authentication
-* Document ownership management
-* QR-code verification
-* Public verification URLs
-* NFT-based document certificates
-* Advanced audit history
-* Role-based access control
-* Improved file validation
-* Cloud object storage
-* Production database integration
-* Automated deployment pipelines
-* Smart-contract event indexing
-* Blockchain explorer integration
+## 1. Multi-chain Support
+
+Support additional networks such as:
+
+```text
+Polygon
+Base
+Arbitrum
+Optimism
+```
 
 ---
 
-# Example End-to-End Flow
+## 2. Document Encryption
+
+Encrypt documents before uploading them to IPFS.
+
+---
+
+## 3. QR Code Verification
+
+Generate a QR code containing:
+
+```text
+Document Hash
+Transaction Hash
+Verification URL
+```
+
+---
+
+## 4. Public Verification Page
+
+Create a public URL such as:
+
+```text
+/verify/<document-hash>
+```
+
+---
+
+## 5. NFT-Based Certificates
+
+A notarized document could optionally be represented by an NFT.
+
+---
+
+## 6. Digital Signatures
+
+Add cryptographic signatures from authorized organizations.
+
+---
+
+## 7. Multiple Document Versions
+
+Maintain a history such as:
+
+```text
+Document v1
+     |
+     v
+Document v2
+     |
+     v
+Document v3
+```
+
+with each version having its own fingerprint.
+
+---
+
+# Example Architecture
+
+The complete system can be summarized as:
 
 ```text
                          USER
                           |
                           v
-                  Upload Document
-                          |
-                          v
-                   Generate Hash
-                          |
-                          v
-                   Connect Wallet
-                          |
-                          v
-                  Submit Transaction
-                          |
-                          v
                  +----------------+
-                 |   Blockchain   |
-                 |                |
-                 | Document Hash   |
-                 | Timestamp      |
-                 | Transaction ID  |
-                 +-------+--------+
-                         |
-                         v
-                  Proof Generated
-                         |
-                         v
-                  Store/Display
-                   Transaction
-                         |
-                         v
-                 Later Verification
-                         |
-                         v
-                 Recalculate Hash
-                         |
-                         v
-                  Compare Hashes
-                         |
-                +--------+--------+
-                |                 |
-              MATCH           NO MATCH
-                |                 |
-                v                 v
-            VERIFIED         NOT VERIFIED
+                 |    React UI    |
+                 +----------------+
+                          |
+              +-----------+-----------+
+              |                       |
+              v                       v
+       SHA-256 Browser          MetaMask
+          Hashing                   |
+              |                     |
+              |                     v
+              |              Ethereum Network
+              |                     |
+              |                     v
+              |              +-------------+
+              +------------->|   Notary    |
+                             |   Contract  |
+                             +-------------+
+                                   |
+                     +-------------+-------------+
+                     |                           |
+                     v                           v
+                Blockchain                    IPFS
+                Record                         CID
+                     |                           |
+                     +-------------+-------------+
+                                   |
+                                   v
+                              Verification
+```
+
+---
+
+# Complete User Workflow
+
+```text
+             START
+               |
+               v
+       Select document
+               |
+               v
+        Calculate SHA-256
+               |
+               v
+       Display fingerprint
+               |
+               v
+       Optional IPFS upload
+               |
+               v
+        Connect MetaMask
+               |
+               v
+       Check blockchain
+               |
+               v
+       Call notarize()
+               |
+               v
+       Confirm transaction
+               |
+               v
+      Blockchain stores proof
+               |
+               v
+        Transaction complete
+               |
+               v
+              END
+```
+
+Verification:
+
+```text
+          Select document
+                 |
+                 v
+          Calculate SHA-256
+                 |
+                 v
+        Query Notary contract
+                 |
+          +------+------+
+          |             |
+          v             v
+       Found          Not Found
+          |             |
+          v             v
+   Read notarization   No record
+          |
+          v
+   Display owner,
+   timestamp,
+   description,
+   IPFS CID
+```
+
+---
+
+# Why Blockchain Is Used
+
+The blockchain provides a shared, append-only record that can be independently queried.
+
+The important idea is not to store the document itself.
+
+Instead:
+
+```text
+Document
+   |
+   v
+Cryptographic Fingerprint
+   |
+   v
+Blockchain Record
+```
+
+If the document changes, its fingerprint changes.
+
+This makes it possible to detect whether the current document matches the fingerprint that was previously registered.
+
+---
+
+# Why IPFS Is Used
+
+Blockchain storage is not designed for storing large documents.
+
+IPFS can be used as a separate storage layer.
+
+The architecture becomes:
+
+```text
+                  Document
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+       SHA-256                IPFS
+          |                     |
+          v                     v
+     Blockchain               CID
+          |                     |
+          +----------+----------+
+                     |
+                     v
+              Verification
+```
+
+The blockchain contains the proof while IPFS can contain the document copy.
+
+---
+
+# Recommended Setup for a New Developer
+
+A new developer should follow this order:
+
+```text
+1. Install Node.js
+        |
+2. Install pnpm
+        |
+3. Clone repository
+        |
+4. Run pnpm install
+        |
+5. Configure .env
+        |
+6. Start Hardhat
+        |
+7. Deploy Notary.sol
+        |
+8. Configure contract address
+        |
+9. Configure MetaMask
+        |
+10. Run pnpm dev
+        |
+11. Connect wallet
+        |
+12. Test notarization
+        |
+13. Test verification
+```
+
+---
+
+# Production Checklist
+
+Before deploying the application publicly, verify:
+
+```text
+[ ] Smart contract compiled successfully
+[ ] Smart contract deployed to intended network
+[ ] Contract address is correct
+[ ] Frontend ABI matches deployed contract
+[ ] Correct chain ID configured
+[ ] MetaMask connection works
+[ ] SHA-256 hashing works
+[ ] Notarization transaction works
+[ ] Verification works
+[ ] getNotarization() works
+[ ] Duplicate documents are handled
+[ ] IPFS upload works if enabled
+[ ] No private keys are committed
+[ ] No API secrets are committed
+[ ] .env is in .gitignore
+[ ] .env.example contains placeholders
+[ ] Production build succeeds
+```
+
+---
+
+# Git / Secret Management
+
+Before pushing the project to GitHub, check:
+
+```bash
+git status
+```
+
+Make sure files containing secrets are not staged.
+
+Check:
+
+```bash
+git diff --cached
+```
+
+Do not commit:
+
+```text
+.env
+private keys
+seed phrases
+Pinata secrets
+RPC secrets
+```
+
+A safe repository should contain:
+
+```text
+.env.example
+```
+
+but not:
+
+```text
+.env
 ```
 
 ---
 
 # Conclusion
 
-The **Web3 Document Notary dApp** demonstrates how blockchain technology can be combined with a modern web application to provide verifiable document integrity.
+The Web3 Document Notary dApp demonstrates how blockchain, cryptographic hashing and decentralized storage can work together to create a verifiable digital document proof system.
 
-The application separates responsibilities into:
-
-```text
-Frontend
-   +
-Backend API
-   +
-Shared API Libraries
-   +
-Web3 / Blockchain
-```
-
-This architecture makes the application suitable for local development as well as cloud-based development environments such as Replit.
-
-For local development, the primary services are:
+The core process is:
 
 ```text
-Frontend → http://localhost:3000
-API      → http://localhost:5000
+Document
+   |
+   v
+SHA-256
+   |
+   v
+Document Fingerprint
+   |
+   v
+Ethereum Notary Contract
+   |
+   +---- Owner
+   +---- Timestamp
+   +---- Description
+   +---- IPFS CID
+   |
+   v
+Future Verification
 ```
 
-For Replit development:
+The key design principle is:
 
-```bash
-PORT=3000 BASE_PATH=/ pnpm --filter @workspace/document-notary run dev
-```
+> **Store the document fingerprint on-chain rather than the complete document.**
 
-and in a separate Shell:
+The blockchain provides the notarization record, SHA-256 provides the document fingerprint, MetaMask provides transaction signing, ethers.js connects the frontend to Ethereum, and IPFS/Pinata can optionally provide decentralized document storage.
 
-```bash
-PORT=5000 pnpm --filter @workspace/api-server run dev
-```
-
-The frontend should then be accessed through Replit's exposed port/Preview interface.
+This architecture allows a document to be checked later against the fingerprint recorded at the time of notarization.
 
 ---
 
-## Repository
+## Quick Start
 
-GitHub repository:
+For experienced developers:
 
-[https://github.com/Anos999/Web3-Document-Notary-dApp](https://github.com/Anos999/Web3-Document-Notary-dApp)
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd document-notary
 
----
+pnpm install
 
-## Project Status
+npx hardhat compile
 
-This project is intended as a Web3 document notarization application and development project. Configuration, blockchain integration, storage mechanisms, and deployment requirements may evolve as development continues.
+npx hardhat node
+```
+
+In another terminal:
+
+```bash
+npx hardhat run scripts/deploy.cjs --network localhost
+```
+
+Configure the deployed address in `.env`, then:
+
+```bash
+pnpm dev
+```
+
+Open the application, connect MetaMask to:
+
+```text
+Hardhat Local
+Chain ID: 31337
+```
+
+and test:
+
+```text
+Upload document
+        ↓
+Generate SHA-256
+        ↓
+Notarize
+        ↓
+Confirm MetaMask transaction
+        ↓
+Verify document
+```
+
+For public testnet testing, deploy the contract to:
+
+```text
+Ethereum Sepolia
+Chain ID: 11155111
+```
+
+and configure the Sepolia contract address in the environment variables.
 
 ```
 ```
